@@ -3,8 +3,12 @@
 # install.packages("openxlsx")
 # install.packages("scales")
 
-unlink("../modis_filter4/", recursive = TRUE)
-dir.create("../modis_filter4/")
+filename <- "../_slush-limit_output_table_SW.xlsx"
+
+outdirname <- "../modis_SW_filtercomplex"
+
+# unlink(outdirname, recursive = TRUE)
+dir.create(outdirname)
 
 Sys.setlocale(category = "LC_TIME", locale = "en_US.UTF-8") # To have month names in English.
 library(ggplot2)
@@ -157,7 +161,7 @@ func_eval_point_triplets <- function(points_stripe, point_id) {
 
 # Read the raw data.
 # dat_raw <- read.csv("sat_modis_proc_l4/slush-limit_output_table.csv")
-dat_raw <- openxlsx::read.xlsx("../slush-limit_output_table.xlsx", sheet = "Sheet1", colNames = TRUE, detectDates = TRUE)
+dat_raw <- openxlsx::read.xlsx(filename, sheet = "Sheet1", colNames = TRUE, detectDates = TRUE)
 dat_raw$date <- as.POSIXct(dat_raw$date, format = "%Y-%m-%d")
 
 dat_raw$qindex_proc <- sl_qi_func(dat_raw$SL_qindex)
@@ -184,7 +188,7 @@ for (year_id in 1:length(years)) {
     
     points_cur_ids <- which((dat_raw$year == year_cur) & (dat_raw$stripe == stripe_cur))
     
-    # There is one stripe with no retrievals!
+    # There are some stripes with no retrievals!
     if (length(points_cur_ids) > 0) {
     
       points_cur <- dat_raw[points_cur_ids,]
@@ -342,11 +346,12 @@ for (year_id in 1:length(years)) {
         points_top3_n <- length(points_top3_ids)
         points_top3_qi <- points_cur_pruned$SL_qindex[points_top3_ids]
         
-        # Points in the highest band are not that good.
-        # Check the lower bands for some more quality.
+        
         points_top1_qi_thresh <- ifelse(max(points_top1_ids) == length(points_cur_pruned[,1]), 6, 8)
         highest_point_safe <- FALSE # This flag is used in case the highest band only contains the last point in the series. That one receives special processing.
-        if ((sum(points_top1_qi) < points_top1_qi_thresh) || (max(points_top1_qi) < 5) || ((max(points_top1_qi) < median(c(points_top1_qi, points_top2_qi, points_top3_qi))) && (median(points_top1_qi) < 7)) || ((points_top1_n == 1) && (points_top1_qi < (max(points_top2_qi) - 2)) && (points_top1_qi < 10) ) ) {
+        # If TRUE: points in the highest band are not that good.
+        # Check the lower bands for some more quality.
+        if ((sum(points_top1_qi) < points_top1_qi_thresh) || ((max(points_top1_qi) < 5) && (points_top1_n < 5)) || ((max(points_top1_qi) < median(c(points_top1_qi, points_top2_qi, points_top3_qi))) && (median(points_top1_qi) < 7)) || ((points_top1_n == 1) && (points_top1_qi < (max(points_top2_qi) - 2)) && (points_top1_qi < 10) ) ) {
           
           # If the low-quality highest band contains just a
           # single point, we first check whether that point
@@ -354,7 +359,7 @@ for (year_id in 1:length(years)) {
           # (almost) the same mean rate (computed with least squares on the earlier points).
           # We look at earlier points within 60 days (but not more than 8 earlier points)
           # and compute dz, dt and rates.
-          if ((points_top1_n == 1) && (points_top1_n == length(points_cur_pruned[,1]))) {
+          if ((points_top1_n == 1) && (points_top1_ids == length(points_cur_pruned[,1]))) {
             
             # dz_all <- points_cur_pruned$SL[points_top1_ids] - points_cur_pruned$SL
             dt_all <- points_cur_pruned$day[points_top1_ids] - points_cur_pruned$day
@@ -390,13 +395,13 @@ for (year_id in 1:length(years)) {
             # points_top2_qi_thresh <- 10
             if ((sum(points_top2_qi) >= min(points_top2_qi_thresh, max(points_top1_qi) + 4)) && (max(points_top2_qi) > max(points_top1_qi))) {
               
-              # If the second band is good and is 40-100 m below
+              # If the second band is good and is >20 m below
               # the first, discard the first (else the
               # first could be correct but slightly noisy, keep it).
               # Discard the first also if the second is immediately
               # below, BUT the points in it are far from the points
               # in the highest (e.g. -2578250/2007).
-              if (((ele_bands_top1 - ele_bands_top2) > 1) && ((ele_bands_top1 - ele_bands_top2) < 6)) {
+              if (((ele_bands_top1 - ele_bands_top2) > 1)) {
                 points_removed_X <- append(points_removed_X, points_cur_pruned$X[points_top1_ids])
                 points_cur_pruned <- points_cur_pruned[-points_top1_ids,]
               }
@@ -458,7 +463,7 @@ for (year_id in 1:length(years)) {
               panel.grid.minor = element_line(color = "#000000", size = 0.05 * mult),
               panel.grid.major = element_line(color = "#000000", size = 0.1 * mult),
               legend.key.height = unit(0.3 * mult, "in"))
-      ggsave(filename = paste("../modis_filter4/aSL_", stripe_cur, "_", year_cur, ".png", sep=""), width = 5*mult, height = 3*mult)
+      ggsave(filename = paste0(outdirname, "/aSL_", stripe_cur, "_", year_cur, ".jpg"), width = 5*mult, height = 3*mult)
     
     }
   }
